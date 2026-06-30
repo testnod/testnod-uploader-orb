@@ -1,0 +1,28 @@
+description: >
+  The common case: run your tests, then upload the JUnit XML report to TestNod
+  in the same job. The upload step uses `when: always`, so results upload even
+  when the test step fails. With the default finalize: "true", the run is
+  uploaded and finalized in a single step. Set your TestNod token as the
+  TESTNOD_TOKEN environment variable (a CircleCI context is recommended).
+
+usage:
+  version: 2.1
+  orbs:
+    testnod-uploader: testnod/testnod-uploader@1.0
+  jobs:
+    test:
+      docker:
+        - image: cimg/ruby:3.3
+      steps:
+        - checkout
+        - run:
+            name: Run tests
+            command: bundle exec rspec --format RspecJunitFormatter --out test-results/rspec.xml
+        - testnod-uploader/upload:
+            file: test-results/rspec.xml
+            tags: "rspec, unit"
+  workflows:
+    test-and-upload:
+      jobs:
+        - test:
+            context: testnod

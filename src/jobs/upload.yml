@@ -1,0 +1,57 @@
+description: >
+  Standalone job that runs the `upload` command on the `default` executor. Most
+  useful as a finalize-only aggregation job (the default here is finalize:
+  "only") that runs after parallel shards / fan-out jobs via `requires:`. To
+  upload a report from this job, the JUnit XML must be present first — attach it
+  from a workspace (see the parallel_shards / fan_out_finalize examples).
+
+executor:
+  name: default
+  tag: <<parameters.executor_tag>>
+
+parameters:
+  executor_tag:
+    type: string
+    default: "current"
+    description: The cimg/base image tag for the default executor.
+  token:
+    type: env_var_name
+    default: TESTNOD_TOKEN
+    description: NAME of the environment variable that holds your TestNod API token.
+  file:
+    type: string
+    default: ""
+    description: Path to the JUnit XML file to upload. Required unless finalize is "only".
+  tags:
+    type: string
+    default: ""
+    description: Comma-separated list of tags to attach to the upload.
+  ignore_failures:
+    type: boolean
+    default: false
+    description: When true, do not fail the job on uploader or finalize errors.
+  uploader_version:
+    type: string
+    default: latest
+    description: Version of the TestNod uploader binary (pinned versions are cached).
+  build_id:
+    type: string
+    default: ""
+    description: Build id grouping shards into one run. Defaults to $CIRCLE_WORKFLOW_ID.
+  finalize:
+    type: enum
+    enum: ["true", "false", "only"]
+    default: "only"
+    description: >
+      Finalize mode. Defaults to "only" because the standalone job is most
+      commonly used as a finalize aggregator after parallel/fan-out uploads.
+
+steps:
+  - upload:
+      token: <<parameters.token>>
+      file: "<<parameters.file>>"
+      tags: "<<parameters.tags>>"
+      ignore_failures: <<parameters.ignore_failures>>
+      uploader_version: "<<parameters.uploader_version>>"
+      build_id: "<<parameters.build_id>>"
+      finalize: "<<parameters.finalize>>"

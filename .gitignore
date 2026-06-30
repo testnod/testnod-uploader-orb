@@ -1,0 +1,9 @@
+# Packed orb output produced by `circleci orb pack`
+orb.yml
+
+# Editor / OS cruft
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

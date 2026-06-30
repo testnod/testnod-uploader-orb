@@ -1,0 +1,17 @@
+description: >
+  A small Linux Docker image with the tooling the TestNod uploader needs (bash,
+  curl, coreutils). The `cimg/base` image tag is parameterized so you can pin it
+  for reproducibility or override it if a future tag regresses. This orb targets
+  Linux for v1; the upload command also runs unmodified inside macOS executors.
+
+parameters:
+  tag:
+    type: string
+    default: "current"
+    description: >
+      The `cimg/base` Docker image tag to run on. Defaults to "current"
+      (CircleCI's rolling latest stable). Pin to a dated tag (e.g. "2024.02")
+      for fully reproducible builds.
+
+docker:
+  - image: cimg/base:<<parameters.tag>>

@@ -1,0 +1,40 @@
+# Setup pipeline (dynamic config) for the testnod/testnod-uploader orb.
+# Lints and packs the orb, then continues to .circleci/test-deploy.yml, which
+# runs the integration tests and (on a vX.Y.Z tag) publishes a production release.
+#
+# Requires "Enable dynamic config using setup workflows" in Project Settings.
+version: 2.1
+setup: true
+
+orbs:
+  orb-tools: circleci/orb-tools@12.3
+  shellcheck: circleci/shellcheck@3.2
+
+filters: &filters
+  tags:
+    only: /.*/
+
+workflows:
+  lint-pack:
+    jobs:
+      - orb-tools/lint:
+          filters: *filters
+      - orb-tools/pack:
+          filters: *filters
+      - orb-tools/review:
+          orb_name: testnod-uploader
+          filters: *filters
+      - shellcheck/check:
+          # Default scan finds src/scripts/upload.sh (the only shell source).
+          filters: *filters
+      - orb-tools/continue:
+          # `orb_name` is the bare orb name; it is injected into test-deploy.yml.
+          orb_name: testnod-uploader
+          pipeline_number: << pipeline.number >>
+          vcs_type: << pipeline.project.type >>
+          requires:
+            - orb-tools/lint
+            - orb-tools/pack
+            - orb-tools/review
+            - shellcheck/check
+          filters: *filters

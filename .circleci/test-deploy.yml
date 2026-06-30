@@ -1,0 +1,79 @@
+# Continuation pipeline: integration-test the freshly packed orb, and on a
+# vX.Y.Z git tag, publish an immutable production release.
+#
+# The orb is injected here as an empty stanza (`testnod-uploader: {}`) by
+# orb-tools/continue in .circleci/config.yml — do not give it a version.
+#
+# The integration jobs talk to a real TestNod project. Create a context named
+# "testnod-orb-testing" holding TESTNOD_TOKEN (a token for a throwaway test
+# project), and optionally TESTNOD_BASE_URL to point at a staging API.
+version: 2.1
+
+orbs:
+  orb-tools: circleci/orb-tools@12.3
+  testnod-uploader: {}
+
+filters: &filters
+  tags:
+    only: /.*/
+
+release-filters: &release-filters
+  branches:
+    ignore: /.*/
+  tags:
+    only: /^v[0-9]+\.[0-9]+\.[0-9]+$/
+
+jobs:
+  # Exercise the `upload` command end-to-end: detect platform, download the
+  # uploader, run it with the full argument set, and finalize. Catches
+  # binary-invocation and finalize-contract regressions.
+  integration-command:
+    docker:
+      - image: cimg/base:current
+    steps:
+      - checkout
+      - run:
+          name: Generate a sample JUnit XML report
+          command: |
+            mkdir -p test-results
+            printf '%s\n' \
+              '<?xml version="1.0" encoding="UTF-8"?>' \
+              '<testsuites>' \
+              '  <testsuite name="orb-integration" tests="1" failures="0" errors="0" time="0.010">' \
+              '    <testcase classname="testnod.orb" name="uploads_results" time="0.010"/>' \
+              '  </testsuite>' \
+              '</testsuites>' \
+              > test-results/junit.xml
+      - testnod-uploader/upload:
+          file: test-results/junit.xml
+          tags: "circleci-orb, integration"
+          finalize: "true"
+
+workflows:
+  test-deploy:
+    jobs:
+      - integration-command:
+          context: testnod-orb-testing
+          filters: *filters
+      # Exercise the standalone job + the finalize-only path.
+      - testnod-uploader/upload:
+          name: integration-finalize-only
+          context: testnod-orb-testing
+          finalize: "only"
+          requires:
+            - integration-command
+          filters: *filters
+
+      # --- Publish (production) — only on a vX.Y.Z git tag ---
+      - orb-tools/pack:
+          filters: *release-filters
+      - orb-tools/publish:
+          orb_name: testnod/testnod-uploader
+          vcs_type: << pipeline.project.type >>
+          pub_type: production
+          requires:
+            - orb-tools/pack
+            - integration-command
+            - integration-finalize-only
+          context: orb-publishing
+          filters: *release-filters

@@ -1,0 +1,50 @@
+description: >
+  Fan out across distinct jobs — for example one per test suite. Each job
+  uploads its own report with finalize: "false", and a final aggregation job
+  runs finalize: "only" once all of them complete (via `requires:`). All jobs
+  share $CIRCLE_WORKFLOW_ID, so they group into one logical TestNod run. Set
+  your TestNod token as TESTNOD_TOKEN (via a context).
+
+usage:
+  version: 2.1
+  orbs:
+    testnod-uploader: testnod/testnod-uploader@1.0
+  jobs:
+    rspec:
+      docker:
+        - image: cimg/ruby:3.3
+      steps:
+        - checkout
+        - run:
+            name: RSpec
+            command: bundle exec rspec --format RspecJunitFormatter --out test-results/rspec.xml
+        - testnod-uploader/upload:
+            file: test-results/rspec.xml
+            tags: rspec
+            finalize: "false"
+    jest:
+      docker:
+        - image: cimg/node:20.11
+      steps:
+        - checkout
+        - run:
+            name: Jest
+            command: npx jest --ci --reporters=default --reporters=jest-junit
+        - testnod-uploader/upload:
+            file: junit.xml
+            tags: jest
+            finalize: "false"
+  workflows:
+    test-and-upload:
+      jobs:
+        - rspec:
+            context: testnod
+        - jest:
+            context: testnod
+        - testnod-uploader/upload:
+            name: finalize-testnod
+            context: testnod
+            finalize: "only"
+            requires:
+              - rspec
+              - jest

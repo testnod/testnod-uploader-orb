@@ -1,0 +1,37 @@
+description: >
+  Split one test job across N containers with CircleCI `parallelism`. Each
+  container uploads its own slice of results with finalize: "false"; because all
+  containers share $CIRCLE_WORKFLOW_ID, they group into one logical TestNod run.
+  A separate job then runs finalize: "only" to close the run once every
+  container has finished. Set your TestNod token as TESTNOD_TOKEN (via a context).
+
+usage:
+  version: 2.1
+  orbs:
+    testnod-uploader: testnod/testnod-uploader@1.0
+  jobs:
+    test:
+      docker:
+        - image: cimg/ruby:3.3
+      parallelism: 4
+      steps:
+        - checkout
+        - run:
+            name: Run tests (split across containers)
+            command: |
+              TESTFILES=$(circleci tests glob "spec/**/*_spec.rb" | circleci tests split --split-by=timings)
+              bundle exec rspec --format RspecJunitFormatter --out test-results/rspec.xml $TESTFILES
+        - testnod-uploader/upload:
+            file: test-results/rspec.xml
+            finalize: "false"
+  workflows:
+    test-and-upload:
+      jobs:
+        - test:
+            context: testnod
+        - testnod-uploader/upload:
+            name: finalize-testnod
+            context: testnod
+            finalize: "only"
+            requires:
+              - test

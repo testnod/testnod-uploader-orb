@@ -1,0 +1,15 @@
+version: 2.1
+
+description: >
+  Upload JUnit XML test results to TestNod for tracking, flaky-test detection,
+  and alerting.
+
+  Provides an `upload` command to add to an existing test job (the primary
+  interface), a thin `upload` job for standalone / finalize-only aggregation,
+  and a parameterized `default` executor. Prerequisite: obtain a TestNod API
+  token from https://testnod.com and expose it to your project as an environment
+  variable (a CircleCI context is recommended).
+
+display:
+  home_url: "https://testnod.com"
+  source_url: "https://github.com/testnod/testnod-uploader-orb"

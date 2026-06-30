@@ -1,0 +1,111 @@
+description: >
+  Download the TestNod uploader and upload a JUnit XML test report, then
+  optionally finalize the run. Add this as a step to a job that has produced a
+  JUnit XML file — this is the orb's primary interface. The run step uses
+  `when: always`, so your results upload even if a prior test step failed. CI
+  metadata (branch, commit SHA, run URL, build id) is read automatically from
+  CircleCI's built-in environment variables.
+
+parameters:
+  token:
+    type: env_var_name
+    default: TESTNOD_TOKEN
+    description: >
+      NAME of the environment variable that holds your TestNod API token — not
+      the token value itself, and without a leading "$". Configure the token in
+      a CircleCI context (recommended) or a project environment variable. It is
+      passed to the uploader and to the finalize endpoint, and is never printed.
+  file:
+    type: string
+    default: ""
+    description: >
+      Path to the JUnit XML file to upload. Required unless `finalize` is "only".
+      If the path is set but no file exists there, the upload is skipped (not
+      failed) — this handles the case where a step before your tests failed.
+  tags:
+    type: string
+    default: ""
+    description: >
+      Comma-separated list of tags to attach to the upload; whitespace around
+      each tag is trimmed. Example: "nightly, integration".
+  ignore_failures:
+    type: boolean
+    default: false
+    description: >
+      When true, pass -ignore-failures to the uploader and do not fail the job
+      if the finalize call returns a non-200 response.
+  uploader_version:
+    type: string
+    default: latest
+    description: >
+      Version of the TestNod uploader binary to download. "latest" re-downloads
+      on every run; a pinned version (e.g. "1.4.0") is cached across runs.
+  build_id:
+    type: string
+    default: ""
+    description: >
+      Build identifier that groups parallel containers / fan-out jobs into one
+      logical test run. Defaults to the CircleCI workflow id
+      ($CIRCLE_WORKFLOW_ID), which is shared across a workflow's containers.
+  finalize:
+    type: enum
+    enum: ["true", "false", "only"]
+    default: "true"
+    description: >
+      When to call TestNod's finalize endpoint. "true" uploads then finalizes
+      (right for single-job workflows); "false" uploads only (use on each
+      parallel shard / fan-out job); "only" skips the upload and just finalizes
+      (use in a separate aggregation job after all shards complete).
+
+steps:
+  # Restore a previously downloaded uploader — only for pinned versions (since
+  # "latest" must always re-download) and never in finalize-only mode (where no
+  # binary is downloaded). restore_cache has no `when` attribute, so it is
+  # wrapped in a conditional-steps block. Note: if an earlier step in your job
+  # already failed, this on_success step is skipped and the run step below simply
+  # re-downloads the binary; the upload still happens.
+  - when:
+      condition:
+        and:
+          - not:
+              equal: ["latest", <<parameters.uploader_version>>]
+          - not:
+              equal: ["only", <<parameters.finalize>>]
+      steps:
+        - restore_cache:
+            keys:
+              - testnod-uploader-v1-<<parameters.uploader_version>>-{{ arch }}
+
+  - run:
+      name: Upload test results to TestNod
+      # Run even if an earlier step (e.g. your tests) failed, so results upload.
+      when: always
+      environment:
+        # <<parameters.token>> expands to the env-var NAME only; the value is
+        # dereferenced inside the script at runtime. All values are quoted so
+        # they reach the script as strings regardless of parameter type.
+        TESTNOD_TOKEN_NAME: "<<parameters.token>>"
+        TESTNOD_FILE: "<<parameters.file>>"
+        TESTNOD_TAGS: "<<parameters.tags>>"
+        TESTNOD_IGNORE_FAILURES: "<<parameters.ignore_failures>>"
+        TESTNOD_UPLOADER_VERSION: "<<parameters.uploader_version>>"
+        TESTNOD_BUILD_ID: "<<parameters.build_id>>"
+        TESTNOD_FINALIZE: "<<parameters.finalize>>"
+      command: <<include(scripts/upload.sh)>>
+
+  # Persist the uploader for pinned versions (and not in finalize-only mode).
+  # save_cache supports `when`, so use `when: always` to cache the binary even if
+  # the upload step above failed.
+  - when:
+      condition:
+        and:
+          - not:
+              equal: ["latest", <<parameters.uploader_version>>]
+          - not:
+              equal: ["only", <<parameters.finalize>>]
+      steps:
+        - save_cache:
+            when: always
+            key: testnod-uploader-v1-<<parameters.uploader_version>>-{{ arch }}
+            paths:
+              - /tmp/testnod-uploader
