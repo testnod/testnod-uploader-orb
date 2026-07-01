@@ -45,7 +45,7 @@ A [Development orb](https://circleci.com/docs/orb-concepts/#development-orbs) ca
 ```yaml
 - orb-tools/publish:
     orb_name: testnod/testnod-uploader
-    vcs_type: << pipeline.project.type >>
+    vcs_type: github
     pub_type: dev
     # Ensure this job requires all test jobs and the pack job.
     requires:
