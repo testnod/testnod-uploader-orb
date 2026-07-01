@@ -1,6 +1,6 @@
 # TestNod Uploader Orb
 
-[![CircleCI Build Status](https://circleci.com/gh/testnod/testnod-uploader-orb.svg?style=shield "CircleCI Build Status")](https://circleci.com/gh/testnod/testnod-uploader-orb) [![CircleCI Orb Version](https://badges.circleci.com/orbs/testnod/testnod-uploader.svg)](https://circleci.com/developer/orbs/orb/testnod/testnod-uploader) [![GitHub License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://raw.githubusercontent.com/testnod/testnod-uploader-orb/main/LICENSE) [![CircleCI Community](https://img.shields.io/badge/community-CircleCI%20Discuss-343434.svg)](https://discuss.circleci.com/c/ecosystem/orbs)
+[![CircleCI Orb Version](https://badges.circleci.com/orbs/testnod/testnod-uploader.svg)](https://circleci.com/developer/orbs/orb/testnod/testnod-uploader) [![GitHub License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://raw.githubusercontent.com/testnod/testnod-uploader-orb/main/LICENSE) [![CircleCI Community](https://img.shields.io/badge/community-CircleCI%20Discuss-343434.svg)](https://discuss.circleci.com/c/ecosystem/orbs)
 
 Upload JUnit XML test reports to [TestNod](https://testnod.com) from CircleCI, and finalize the test run once all results are in. Add the `upload` command to a job that produces a JUnit XML file — it uploads even if a prior test step failed, and reads CI metadata (branch, commit SHA, run URL, build id) automatically from CircleCI's built-in environment variables.
 
