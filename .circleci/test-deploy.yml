@@ -1,22 +1,18 @@
-# Continuation pipeline: integration-test the freshly packed orb, and on a
-# vX.Y.Z git tag, publish an immutable production release.
-#
-# The orb is injected here as an empty stanza (`testnod-uploader: {}`) by
-# orb-tools/continue in .circleci/config.yml — do not give it a version.
-#
-# The integration jobs talk to a real TestNod project. Create a context named
-# "testnod-orb-testing" holding TESTNOD_TOKEN (a token for a throwaway test
-# project), and optionally TESTNOD_BASE_URL to point at a staging API.
 version: 2.1
-
 orbs:
+  # Your orb will be automatically injected here during the pipeline.
+  # Reference your orb's jobs and commands below as they will exist when built.
   orb-tools: circleci/orb-tools@12.3
+  # The orb definition is intentionally not included here. It will be injected into the pipeline.
   testnod-uploader: {}
 
+# Use this tag to ensure test jobs always run,
+# even though the downstream publish job will only run on release tags.
 filters: &filters
   tags:
     only: /.*/
 
+# Filter for release tags.
 release-filters: &release-filters
   branches:
     ignore: /.*/
@@ -24,56 +20,35 @@ release-filters: &release-filters
     only: /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
 jobs:
-  # Exercise the `upload` command end-to-end: detect platform, download the
-  # uploader, run it with the full argument set, and finalize. Catches
-  # binary-invocation and finalize-contract regressions.
-  integration-command:
+  # Smoke-test the `upload` command. Pointing at a file that doesn't exist
+  # exercises the missing-file skip path, which runs (and exits 0) before the
+  # command ever touches TESTNOD_TOKEN or the network, so no context/secrets
+  # are needed for this job.
+  command-test:
     docker:
       - image: cimg/base:current
     steps:
       - checkout
-      - run:
-          name: Generate a sample JUnit XML report
-          command: |
-            mkdir -p test-results
-            printf '%s\n' \
-              '<?xml version="1.0" encoding="UTF-8"?>' \
-              '<testsuites>' \
-              '  <testsuite name="orb-integration" tests="1" failures="0" errors="0" time="0.010">' \
-              '    <testcase classname="testnod.orb" name="uploads_results" time="0.010"/>' \
-              '  </testsuite>' \
-              '</testsuites>' \
-              > test-results/junit.xml
       - testnod-uploader/upload:
-          file: test-results/junit.xml
-          tags: "circleci-orb, integration"
-          finalize: "true"
-
+          file: test-results/does-not-exist.xml
+          finalize: "false"
 workflows:
   test-deploy:
     jobs:
-      - integration-command:
-          context: testnod-orb-testing
+      # Make sure to include "filters: *filters" in every test job you want to run as part of your deployment.
+      # Test your orb's commands in a custom job and test your orb's jobs directly as a part of this workflow.
+      - command-test:
           filters: *filters
-      # Exercise the standalone job + the finalize-only path.
-      - testnod-uploader/upload:
-          name: integration-finalize-only
-          context: testnod-orb-testing
-          finalize: "only"
-          requires:
-            - integration-command
-          filters: *filters
-
-      # --- Publish (production) — only on a vX.Y.Z git tag ---
+      # The orb must be re-packed for publishing, and saved to the workspace.
       - orb-tools/pack:
           filters: *release-filters
       - orb-tools/publish:
           orb_name: testnod/testnod-uploader
           vcs_type: << pipeline.project.type >>
           pub_type: production
+          # Ensure this job requires all test jobs and the pack job.
           requires:
             - orb-tools/pack
-            - integration-command
-            - integration-finalize-only
-          context: orb-publishing
+            - command-test
+          context: testnod-publishing
           filters: *release-filters

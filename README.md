@@ -1,144 +1,58 @@
 # TestNod Uploader Orb
 
-[![CircleCI Orb Version](https://badges.circleci.com/orbs/testnod/testnod-uploader.svg)](https://circleci.com/developer/orbs/orb/testnod/testnod-uploader)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![CircleCI Build Status](https://circleci.com/gh/testnod/testnod-uploader-orb.svg?style=shield "CircleCI Build Status")](https://circleci.com/gh/testnod/testnod-uploader-orb) [![CircleCI Orb Version](https://badges.circleci.com/orbs/testnod/testnod-uploader.svg)](https://circleci.com/developer/orbs/orb/testnod/testnod-uploader) [![GitHub License](https://img.shields.io/badge/license-MIT-lightgrey.svg)](https://raw.githubusercontent.com/testnod/testnod-uploader-orb/main/LICENSE) [![CircleCI Community](https://img.shields.io/badge/community-CircleCI%20Discuss-343434.svg)](https://discuss.circleci.com/c/ecosystem/orbs)
 
-Upload JUnit XML test results to [TestNod](https://testnod.com) for tracking,
-flaky-test detection, and alerting — straight from your CircleCI pipelines.
+Upload JUnit XML test reports to [TestNod](https://testnod.com) from CircleCI, and finalize the test run once all results are in. Add the `upload` command to a job that produces a JUnit XML file — it uploads even if a prior test step failed, and reads CI metadata (branch, commit SHA, run URL, build id) automatically from CircleCI's built-in environment variables.
 
-## Prerequisites
+See [`src/README.md`](src/README.md) for how the orb source is organized, and [`src/examples`](src/examples) for usage examples (single job, parallel shards, fan-out across jobs).
 
-1. A [TestNod](https://testnod.com) account and a project **API token**.
-2. Expose the token to your pipeline as an environment variable. A
-   [CircleCI context](https://circleci.com/docs/contexts/) is recommended:
+---
 
-   ```
-   Organization Settings → Contexts → create "testnod" → add TESTNOD_TOKEN
-   ```
+## Resources
 
-   By default the orb reads the token from the env var named `TESTNOD_TOKEN`.
-   You pass the **name** of the variable, never the secret value itself.
+[CircleCI Orb Registry Page](https://circleci.com/developer/orbs/orb/testnod/testnod-uploader) - The official registry page of this orb for all versions, executors, commands, and jobs described.
 
-## Quick start
+[CircleCI Orb Docs](https://circleci.com/docs/orb-intro/#section=configuration) - Docs for using, creating, and publishing CircleCI Orbs.
 
-```yaml
-version: 2.1
+### How to Contribute
 
-orbs:
-  testnod-uploader: testnod/testnod-uploader@1.0
+We welcome [issues](https://github.com/testnod/testnod-uploader-orb/issues) and [pull requests](https://github.com/testnod/testnod-uploader-orb/pulls) against this repository!
 
-jobs:
-  test:
-    docker:
-      - image: cimg/ruby:3.3
-    steps:
-      - checkout
-      - run:
-          name: Run tests
-          command: bundle exec rspec --format RspecJunitFormatter --out test-results/rspec.xml
-      # Add one step after your tests. `when: always` is built in, so results
-      # upload even when the tests fail.
-      - testnod-uploader/upload:
-          file: test-results/rspec.xml
-          tags: "rspec, unit"
+### How to Publish An Update
 
-workflows:
-  test-and-upload:
-    jobs:
-      - test:
-          context: testnod
-```
+1. Merge pull requests with desired changes to the main branch.
+    - For the best experience, squash-and-merge and use [Conventional Commit Messages](https://conventionalcommits.org/).
+2. Find the current version of the orb.
+    - You can run `circleci orb info testnod/testnod-uploader | grep "Latest"` to see the current version.
+3. Create a [new Release](https://github.com/testnod/testnod-uploader-orb/releases/new) on GitHub.
+    - Click "Choose a tag" and _create_ a new [semantically versioned](http://semver.org/) tag. (ex: v1.0.0)
+      - We will have an opportunity to change this before we publish if needed after the next step.
+4.  Click _"+ Auto-generate release notes"_.
+    - This will create a summary of all of the merged pull requests since the previous release.
+    - If you have used _[Conventional Commit Messages](https://conventionalcommits.org/)_ it will be easy to determine what types of changes were made, allowing you to ensure the correct version tag is being published.
+5. Now ensure the version tag selected is semantically accurate based on the changes included.
+6. Click _"Publish Release"_.
+    - This will push a new tag and trigger your publishing pipeline on CircleCI.
 
-## The `upload` command
+### Development Orbs
 
-Add `testnod-uploader/upload` as a step to any job that produced a JUnit XML
-file. This is the primary interface.
+Prerequisites:
 
-| Parameter | Type | Default | Description |
-|---|---|---|---|
-| `token` | `env_var_name` | `TESTNOD_TOKEN` | **Name** of the env var holding your API token (not the value). |
-| `file` | `string` | `""` | Path to the JUnit XML file. Required unless `finalize` is `"only"`. |
-| `tags` | `string` | `""` | Comma-separated tags; whitespace is trimmed. |
-| `ignore_failures` | `boolean` | `false` | Don't fail the job on uploader/finalize errors. |
-| `uploader_version` | `string` | `latest` | Uploader binary version. Pinned versions are cached. |
-| `build_id` | `string` | `""` | Groups shards into one run. Defaults to `$CIRCLE_WORKFLOW_ID`. |
-| `finalize` | `enum` | `"true"` | `"true"` upload + finalize, `"false"` upload only, `"only"` finalize only. |
+- An initial semver deployment must be performed in order for Development orbs to be published and seen in the [Orb Registry](https://circleci.com/developer/orbs).
 
-The run step uses `when: always`, so a failing test step earlier in the job
-does **not** skip the upload. If `file` is set but the file does not exist (e.g.
-a step before your tests failed), the upload is **skipped, not failed**.
-
-## The `upload` job
-
-A thin wrapper that runs the command on the parameterized `default` executor.
-It takes the same parameters as the command, plus `executor_tag` (the
-`cimg/base` image tag), and defaults `finalize` to `"only"` — because its most
-common use is a finalize aggregator after parallel/fan-out uploads.
-
-## Parallel tests (CircleCI `parallelism`)
-
-Each container uploads its slice with `finalize: "false"`; a separate job
-finalizes once. They share `$CIRCLE_WORKFLOW_ID`, so they group into one run.
+A [Development orb](https://circleci.com/docs/orb-concepts/#development-orbs) can be created to help with rapid development or testing. To create a Development orb, change the `orb-tools/publish` job in `test-deploy.yml` to be the following:
 
 ```yaml
-workflows:
-  test-and-upload:
-    jobs:
-      - test:                       # parallelism: 4, uploads with finalize: "false"
-          context: testnod
-      - testnod-uploader/upload:
-          name: finalize-testnod
-          context: testnod
-          finalize: "only"
-          requires:
-            - test
+- orb-tools/publish:
+    orb_name: testnod/testnod-uploader
+    vcs_type: << pipeline.project.type >>
+    pub_type: dev
+    # Ensure this job requires all test jobs and the pack job.
+    requires:
+      - orb-tools/pack
+      - command-test
+    context: testnod-publishing
+    filters: *filters
 ```
 
-See the **parallel_shards** and **fan_out_finalize**
-[usage examples](https://circleci.com/developer/orbs/orb/testnod/testnod-uploader#usage-examples)
-for full configs (including the per-container test step).
-
-## Platform support
-
-v1 targets **Linux** (the `default` executor uses `cimg/base`). The `upload`
-command also runs unmodified inside a macOS executor (the script detects
-`darwin`/`arm64`). Windows is not supported in v1.
-
-## Advanced
-
-- **Finalize API base URL**: set `TESTNOD_BASE_URL` as an environment variable
-  to override `https://testnod.com` (e.g. for staging).
-- **Caching**: pinned `uploader_version`s are cached per OS/arch via
-  `save_cache`/`restore_cache`; `latest` always re-downloads.
-
-## Contributing / development
-
-This orb uses the [Orb Development Kit](https://circleci.com/docs/orb-development-kit/)
-with a decomposed source layout:
-
-```
-src/
-├── @orb.yml            # orb metadata (description, display URLs)
-├── commands/upload.yml # the upload command
-├── jobs/upload.yml     # the standalone job
-├── executors/default.yml
-├── examples/           # usage examples (rendered in the registry)
-└── scripts/upload.sh   # the shell logic (included via <<include>>)
-```
-
-```bash
-# Lint + pack locally
-circleci orb pack src > orb.yml
-circleci orb validate orb.yml
-
-# Lint the shell
-shellcheck src/scripts/upload.sh
-```
-
-CI lints, packs, runs integration tests against a real TestNod test project, and
-publishes a production release when a `vX.Y.Z` tag is pushed. See
-`.circleci/config.yml` and `.circleci/test-deploy.yml`.
-
-## License
-
-[MIT](./LICENSE)
+The job output will contain a link to the Development orb Registry page. The parameters `enable_pr_comment` and `github_token` can be set to add the relevant publishing information onto a pull request. Please refer to the [orb-tools/publish](https://circleci.com/developer/orbs/orb/circleci/orb-tools#jobs-publish) documentation for more information and options.

@@ -1,9 +1,3 @@
-# Packed orb output produced by `circleci orb pack`
+# orb.yml is "packed" from source, and not published directly from the repository.
 orb.yml
-
-# Editor / OS cruft
 .DS_Store
-*.swp
-*~
-.idea/
-.vscode/
