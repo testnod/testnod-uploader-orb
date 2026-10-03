@@ -12,7 +12,7 @@ See [`src/README.md`](src/README.md) for how the orb source is organized, and [`
 
 [CircleCI Orb Registry Page](https://circleci.com/developer/orbs/orb/testnod/testnod-uploader) - The official registry page of this orb for all versions, executors, commands, and jobs described.
 
-[CircleCI Orb Docs](https://circleci.com/docs/orb-intro/#section=configuration) - Docs for using, creating, and publishing CircleCI Orbs.
+[CircleCI Orb Docs](https://circleci.com/docs/orbs/use/orb-intro/) - Docs for using, creating, and publishing CircleCI Orbs.
 
 ### How to Contribute
 
@@ -40,7 +40,7 @@ Prerequisites:
 
 - An initial semver deployment must be performed in order for Development orbs to be published and seen in the [Orb Registry](https://circleci.com/developer/orbs).
 
-A [Development orb](https://circleci.com/docs/orb-concepts/#development-orbs) can be created to help with rapid development or testing. To create a Development orb, change the `orb-tools/publish` job in `test-deploy.yml` to be the following:
+A [Development orb](https://circleci.com/docs/orbs/use/orb-concepts/#development-orbs) can be created to help with rapid development or testing. To create a Development orb, change the `orb-tools/publish` job in `test-deploy.yml` to be the following:
 
 ```yaml
 - orb-tools/publish:

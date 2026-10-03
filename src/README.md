@@ -22,5 +22,5 @@ Within the `@orb.yml` we generally specify 4 configuration keys
     (optional) Some orbs may depend on other orbs. Import them here.
 
 ## See:
- - [Orb Author Intro](https://circleci.com/docs/2.0/orb-author-intro/#section=configuration)
- - [Reusable Configuration](https://circleci.com/docs/2.0/reusing-config)
+ - [Orb Author Intro](https://circleci.com/docs/orbs/author/orb-author/)
+ - [Reusable Configuration](https://circleci.com/docs/reference/reusing-config/)

@@ -24,7 +24,7 @@ usage:
             finalize: "false"
     jest:
       docker:
-        - image: cimg/node:20.11
+        - image: cimg/node:24.21
       steps:
         - checkout
         - run:
