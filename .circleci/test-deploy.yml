@@ -19,25 +19,190 @@ release-filters: &release-filters
   tags:
     only: /^v[0-9]+\.[0-9]+\.[0-9]+$/
 
+# Every test job talks to the mock server from test/mock_server.py, never
+# testnod.com. Both the uploader binary and the orb's finalize call read
+# TESTNOD_BASE_URL. The scenarios that fail on purpose (server errors, missing
+# token, ...) live in test/run-tests.sh, which runs in the setup workflow:
+# CircleCI has no way to let an expected step failure pass.
+mock-environment: &mock-environment
+  TESTNOD_BASE_URL: http://127.0.0.1:8765
+  TESTNOD_TOKEN: test-token
+
+commands:
+  start-mock-server:
+    steps:
+      - run:
+          name: Start mock TestNod server
+          background: true
+          command: python3 test/mock_server.py
+      - run:
+          name: Wait for mock TestNod server
+          command: |
+            for _ in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:8765/__requests > /dev/null 2>&1; then
+                echo "Mock TestNod server is up."
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "Mock TestNod server didn't start."
+            exit 1
+
+  reset-mock-server:
+    steps:
+      - run:
+          name: Reset mock server
+          command: curl -fsS -X DELETE http://127.0.0.1:8765/__requests
+
 jobs:
-  # Smoke-test the `upload` command. Pointing at a file that doesn't exist
-  # exercises the missing-file skip path, which runs (and exits 0) before the
-  # command ever touches TESTNOD_TOKEN or the network, so no context/secrets
-  # are needed for this job.
+  # Runs the orb's `upload` command against the mock server and checks the
+  # parameters and CircleCI metadata reach TestNod.
   command-test:
+    parameters:
+      resource_class:
+        type: string
     docker:
       - image: cimg/base:current
+    resource_class: << parameters.resource_class >>
+    environment:
+      <<: *mock-environment
+      MY_TESTNOD_TOKEN: other-token
     steps:
       - checkout
+      - start-mock-server
+
+      # Upload then finalize (the default). Pinned so save_cache stores the
+      # binary for the cache-test job.
       - testnod-uploader/upload:
-          file: test-results/does-not-exist.xml
+          file: test/fixtures/results.xml
+          tags: " ci , rspec,,nightly"
+          uploader_version: v0.0.6
+      - run:
+          name: "Check: upload and finalize"
+          command: |
+            test -x /tmp/testnod-uploader/testnod-uploader-linux-* || { echo "Expected the uploader binary in /tmp/testnod-uploader"; exit 1; }
+            python3 test/expect.py \
+              --count upload=1 --count presigned=1 --count finalize=1 --count upload_failed=0 \
+              --equals "upload.headers.project-token=test-token" \
+              --equals 'upload.body.tags=[{"value": "ci"}, {"value": "rspec"}, {"value": "nightly"}]' \
+              --equals "upload.body.test_run.metadata.branch=${CIRCLE_BRANCH:-$CIRCLE_TAG}" \
+              --equals "upload.body.test_run.metadata.commit_sha=${CIRCLE_SHA1}" \
+              --equals "upload.body.test_run.metadata.run_url=${CIRCLE_BUILD_URL}" \
+              --equals "upload.body.test_run.metadata.build_id=${CIRCLE_WORKFLOW_ID}" \
+              --body-file presigned=test/fixtures/results.xml \
+              --equals "finalize.headers.project-token=test-token" \
+              --equals "finalize.body.build_id=${CIRCLE_WORKFLOW_ID}"
+
+      # Parallel shard: upload only, custom build ID and token variable
+      - reset-mock-server
+      - testnod-uploader/upload:
+          token: MY_TESTNOD_TOKEN
+          file: test/fixtures/results.xml
+          build_id: shard-build
           finalize: "false"
+      - run:
+          name: "Check: finalize false"
+          command: |
+            python3 test/expect.py \
+              --count upload=1 --count presigned=1 --count finalize=0 \
+              --equals "upload.headers.project-token=other-token" \
+              --equals "upload.body.test_run.metadata.build_id=shard-build"
+
+      # Aggregate step: finalize only, no file
+      - reset-mock-server
+      - testnod-uploader/upload:
+          build_id: shard-build
+          finalize: only
+      - run:
+          name: "Check: finalize only"
+          command: |
+            python3 test/expect.py \
+              --count upload=0 --count presigned=0 --count finalize=1 \
+              --equals "finalize.body.build_id=shard-build"
+
+      # Results file never produced: warn and skip, don't fail
+      - reset-mock-server
+      - testnod-uploader/upload:
+          file: test/fixtures/does-not-exist.xml
+      - run:
+          name: "Check: missing results file"
+          command: python3 test/expect.py --count upload=0 --count finalize=0
+
+      # Server errors don't fail the step with ignore_failures
+      - reset-mock-server
+      - run:
+          name: Make mock server return 500
+          command: |
+            curl -fsS -X POST -d '{"status": 500}' http://127.0.0.1:8765/__fail
+      - testnod-uploader/upload:
+          file: test/fixtures/results.xml
+          ignore_failures: true
+      - run:
+          name: "Check: server error with ignore_failures"
+          command: python3 test/expect.py --at-least upload=1 --at-least finalize=1
+
+  # The command-test job saved the pinned binary to the cache when it ran.
+  # Blocking releases.testnod.com makes the upload fail unless restore_cache
+  # brought the binary back.
+  cache-test:
+    parameters:
+      resource_class:
+        type: string
+    docker:
+      - image: cimg/base:current
+    resource_class: << parameters.resource_class >>
+    environment: *mock-environment
+    steps:
+      - checkout
+      - start-mock-server
+      - run:
+          name: Block releases.testnod.com
+          command: echo "127.0.0.1 releases.testnod.com" | sudo tee -a /etc/hosts
+      - testnod-uploader/upload:
+          file: test/fixtures/results.xml
+          uploader_version: v0.0.6
+      - run:
+          name: "Check: upload with cached binary"
+          command: python3 test/expect.py --count upload=1 --count presigned=1 --count finalize=1
+
 workflows:
   test-deploy:
     jobs:
       # Make sure to include "filters: *filters" in every test job you want to run as part of your deployment.
       # Test your orb's commands in a custom job and test your orb's jobs directly as a part of this workflow.
       - command-test:
+          matrix:
+            parameters:
+              resource_class: [medium, arm.medium]
+          filters: *filters
+      - cache-test:
+          matrix:
+            parameters:
+              resource_class: [medium, arm.medium]
+          requires:
+            - command-test-<< matrix.resource_class >>
+          filters: *filters
+      # The orb's `upload` job, used as the finalize aggregator after shards.
+      # pre-steps start the mock server in the job's container.
+      - testnod-uploader/upload:
+          name: job-test
+          build_id: job-test-build
+          pre-steps:
+            - checkout
+            - start-mock-server
+            - run:
+                name: Point the orb at the mock server
+                command: |
+                  echo 'export TESTNOD_BASE_URL=http://127.0.0.1:8765' >> "$BASH_ENV"
+                  echo 'export TESTNOD_TOKEN=test-token' >> "$BASH_ENV"
+          post-steps:
+            - run:
+                name: "Check: upload job (finalize only)"
+                command: |
+                  python3 test/expect.py \
+                    --count upload=0 --count finalize=1 \
+                    --equals "finalize.headers.project-token=test-token" \
+                    --equals "finalize.body.build_id=job-test-build"
           filters: *filters
       # The orb must be re-packed for publishing, and saved to the workspace.
       - orb-tools/pack:
@@ -50,5 +215,7 @@ workflows:
           requires:
             - orb-tools/pack
             - command-test
+            - cache-test
+            - job-test
           context: testnod-publishing
           filters: *release-filters

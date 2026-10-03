@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="testnod-uploader-orb" tests="2" failures="1" errors="0" time="0.3">
+  <testsuite name="ExampleSuite" tests="2" failures="1" errors="0" skipped="0" time="0.3">
+    <testcase classname="ExampleSuite" name="passes" time="0.1"/>
+    <testcase classname="ExampleSuite" name="fails" time="0.2">
+      <failure message="expected true, got false" type="AssertionError">expected true, got false</failure>
+    </testcase>
+  </testsuite>
+</testsuites>

@@ -3,6 +3,24 @@
 All notable changes to the `testnod/testnod-uploader` orb are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+
+- `ignore_failures: true` now also covers a finalize request that can't reach
+  TestNod at all, instead of failing the job.
+- `ignore_failures: true` is honored when the boolean reaches the script as
+  `1` instead of `true`.
+
+### Changed
+
+- `fan_out_finalize` example now uses `cimg/node:24.21` (Node 20 is end-of-life).
+- Updated CircleCI docs links in the READMEs to their current locations.
+- CI: bumped `circleci/orb-tools` to 12.5 (CircleCI CLI v1 support) and
+  `circleci/shellcheck` to 3.4.
+- CI: tests against a mock TestNod server (`test/run-tests.sh` for the upload
+  script, plus orb-level tests in `test-deploy.yml`), on x86_64 and ARM64.
+
 ## [v1.0.0] - 2026-07-01
 
 ### Added

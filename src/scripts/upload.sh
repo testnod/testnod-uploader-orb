@@ -55,6 +55,13 @@ case "$TESTNOD_FINALIZE" in
     ;;
 esac
 
+# The compiled config turns "<<parameters.ignore_failures>>" into a YAML
+# boolean, which can reach the script as "1" rather than "true".
+case "$TESTNOD_IGNORE_FAILURES" in
+  true | 1) TESTNOD_IGNORE_FAILURES=true ;;
+  *) TESTNOD_IGNORE_FAILURES=false ;;
+esac
+
 # Resolve the token from the named env var via bash indirect expansion. Only the
 # variable NAME ever reaches the compiled config; the value is dereferenced here
 # at runtime.
@@ -162,13 +169,15 @@ if [ "$TESTNOD_FINALIZE" = "true" ] || [ "$TESTNOD_FINALIZE" = "only" ]; then
   BASE_URL="${TESTNOD_BASE_URL:-https://testnod.com}"
   echo "Finalizing TestNod test run for build ${EFFECTIVE_BUILD_ID}..."
 
+  # `|| true` so a connection error doesn't exit under `set -e`: curl still
+  # writes "000" as the status code, which is handled below like any non-200.
   HTTP_CODE="$(curl -sS -o /tmp/testnod-finalize.body -w "%{http_code}" \
     --retry 3 --retry-delay 2 --retry-connrefused \
     -X POST "${BASE_URL}/integrations/test_runs/finalize" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
     -H "Project-Token: ${TESTNOD_TOKEN}" \
-    -d "{\"build_id\":\"${EFFECTIVE_BUILD_ID}\"}")"
+    -d "{\"build_id\":\"${EFFECTIVE_BUILD_ID}\"}")" || true
 
   if [ "$HTTP_CODE" != "200" ]; then
     BODY="$(cat /tmp/testnod-finalize.body 2>/dev/null || true)"

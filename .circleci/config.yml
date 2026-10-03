@@ -8,6 +8,22 @@ filters: &filters
   tags:
     only: /.*/
 
+jobs:
+  # Runs src/scripts/upload.sh through every scenario against the mock TestNod
+  # server. The same script runs locally: test/run-tests.sh
+  script-tests:
+    parameters:
+      resource_class:
+        type: string
+    docker:
+      - image: cimg/python:3.13
+    resource_class: << parameters.resource_class >>
+    steps:
+      - checkout
+      - run:
+          name: Run upload script tests
+          command: test/run-tests.sh
+
 workflows:
   lint-pack:
     jobs:
@@ -20,10 +36,15 @@ workflows:
           filters: *filters
       - shellcheck/check:
           filters: *filters
+      - script-tests:
+          matrix:
+            parameters:
+              resource_class: [medium, arm.medium]
+          filters: *filters
       # Triggers the next workflow in the Orb Development Kit.
       - orb-tools/continue:
           pipeline_number: << pipeline.number >>
           vcs_type: github
           orb_name: testnod-uploader
-          requires: [orb-tools/lint, orb-tools/pack, orb-tools/review, shellcheck/check]
+          requires: [orb-tools/lint, orb-tools/pack, orb-tools/review, shellcheck/check, script-tests]
           filters: *filters
