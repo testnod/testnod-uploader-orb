@@ -22,7 +22,7 @@ We welcome [issues](https://github.com/testnod/testnod-uploader-orb/issues) and 
 
 Every pipeline tests the orb against a mock TestNod server (`test/mock_server.py`) and checks the recorded requests with `test/expect.py`. No requests go to testnod.com.
 
-- **Script tests** (`.circleci/config.yml`): `test/run-tests.sh` runs `src/scripts/upload.sh` through each scenario: upload and finalize, each `finalize` mode, custom token variable, tag-triggered pipelines, a missing results file, a missing token or `file` parameter, server errors, an unreachable server, `ignore_failures`, a pinned version, `latest`, and a version that doesn't exist. Runs on x86_64 and ARM64.
+- **Script tests** (`.circleci/config.yml`): `test/run-tests.sh` runs `src/scripts/upload.sh` through each scenario: upload and finalize, each `finalize` mode, custom token variable, `retry`, tag-triggered pipelines, a missing results file, a missing token or `file` parameter, server errors, an unreachable server, `ignore_failures`, a pinned version, `latest`, and a version that doesn't exist. Runs on x86_64 and ARM64.
 - **Orb tests** (`.circleci/test-deploy.yml`): run the packed orb's `upload` command and `upload` job, checking that parameters and CircleCI metadata reach TestNod, and that a pinned uploader is restored from the cache.
 
 To run the script tests locally (needs bash, curl and python3):

@@ -30,6 +30,10 @@ parameters:
     type: boolean
     default: false
     description: When true, do not fail the job on uploader or finalize errors.
+  retry:
+    type: boolean
+    default: false
+    description: When true, mark this upload as a rerun of failed tests. Needs uploader v0.1.0+.
   uploader_version:
     type: string
     default: latest
@@ -52,6 +56,7 @@ steps:
       file: "<<parameters.file>>"
       tags: "<<parameters.tags>>"
       ignore_failures: <<parameters.ignore_failures>>
+      retry: <<parameters.retry>>
       uploader_version: "<<parameters.uploader_version>>"
       build_id: "<<parameters.build_id>>"
       finalize: "<<parameters.finalize>>"

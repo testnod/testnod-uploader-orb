@@ -76,7 +76,7 @@ jobs:
       - testnod-uploader/upload:
           file: test/fixtures/results.xml
           tags: " ci , rspec,,nightly"
-          uploader_version: v0.0.6
+          uploader_version: v0.1.0
       - run:
           name: "Check: upload and finalize"
           command: |
@@ -89,6 +89,7 @@ jobs:
               --equals "upload.body.test_run.metadata.commit_sha=${CIRCLE_SHA1}" \
               --equals "upload.body.test_run.metadata.run_url=${CIRCLE_BUILD_URL}" \
               --equals "upload.body.test_run.metadata.build_id=${CIRCLE_WORKFLOW_ID}" \
+              --equals "upload.body.retry=false" \
               --body-file presigned=test/fixtures/results.xml \
               --equals "finalize.headers.project-token=test-token" \
               --equals "finalize.body.build_id=${CIRCLE_WORKFLOW_ID}"
@@ -106,6 +107,21 @@ jobs:
             python3 test/expect.py \
               --count upload=1 --count presigned=1 --count finalize=0 \
               --equals "upload.headers.project-token=other-token" \
+              --equals "upload.body.test_run.metadata.build_id=shard-build"
+
+      # Rerun report: marked as a retry, still upload only
+      - reset-mock-server
+      - testnod-uploader/upload:
+          file: test/fixtures/results.xml
+          build_id: shard-build
+          finalize: "false"
+          retry: true
+      - run:
+          name: "Check: retry"
+          command: |
+            python3 test/expect.py \
+              --count upload=1 --count presigned=1 --count finalize=0 \
+              --equals "upload.body.retry=true" \
               --equals "upload.body.test_run.metadata.build_id=shard-build"
 
       # Aggregate step: finalize only, no file
@@ -160,7 +176,7 @@ jobs:
           command: echo "127.0.0.1 releases.testnod.com" | sudo tee -a /etc/hosts
       - testnod-uploader/upload:
           file: test/fixtures/results.xml
-          uploader_version: v0.0.6
+          uploader_version: v0.1.0
       - run:
           name: "Check: upload with cached binary"
           command: python3 test/expect.py --count upload=1 --count presigned=1 --count finalize=1

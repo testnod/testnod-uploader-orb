@@ -34,6 +34,14 @@ parameters:
     description: >
       When true, pass -ignore-failures to the uploader and do not fail the job
       if the finalize call returns a non-200 response.
+  retry:
+    type: boolean
+    default: false
+    description: >
+      When true, mark this upload as a rerun of tests that failed earlier in the
+      same build (passes -retry to the uploader). Use it on the step that
+      uploads the rerun report, usually with finalize: "false". Requires
+      uploader_version "latest" or v0.1.0 and later.
   uploader_version:
     type: string
     default: latest
@@ -88,6 +96,7 @@ steps:
         TESTNOD_FILE: "<<parameters.file>>"
         TESTNOD_TAGS: "<<parameters.tags>>"
         TESTNOD_IGNORE_FAILURES: "<<parameters.ignore_failures>>"
+        TESTNOD_RETRY: "<<parameters.retry>>"
         TESTNOD_UPLOADER_VERSION: "<<parameters.uploader_version>>"
         TESTNOD_BUILD_ID: "<<parameters.build_id>>"
         TESTNOD_FINALIZE: "<<parameters.finalize>>"

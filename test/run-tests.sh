@@ -21,7 +21,7 @@ cd "$(dirname "$0")/.."
 
 MOCK_PORT=8765
 MOCK_URL="http://127.0.0.1:${MOCK_PORT}"
-UPLOADER_VERSION="${UPLOADER_VERSION:-v0.0.6}"
+UPLOADER_VERSION="${UPLOADER_VERSION:-v0.1.0}"
 UPLOADER_DIR="/tmp/testnod-uploader"
 TMP_DIR=$(mktemp -d)
 OUTPUT="${TMP_DIR}/output.log"
@@ -82,6 +82,7 @@ run_upload() {
     TESTNOD_FILE=test/fixtures/results.xml \
     TESTNOD_TAGS="" \
     TESTNOD_IGNORE_FAILURES=false \
+    TESTNOD_RETRY=false \
     TESTNOD_UPLOADER_VERSION="$UPLOADER_VERSION" \
     TESTNOD_BUILD_ID="" \
     TESTNOD_FINALIZE=true \
@@ -153,6 +154,7 @@ upload_and_finalize() {
     --equals "upload.body.test_run.metadata.commit_sha=0123456789abcdef" \
     --equals "upload.body.test_run.metadata.run_url=https://circleci.com/gh/testnod/testnod-uploader-orb/42" \
     --equals "upload.body.test_run.metadata.build_id=test-workflow-id" \
+    --equals "upload.body.retry=false" \
     --body-file presigned=test/fixtures/results.xml \
     --equals "finalize.headers.project-token=test-token" \
     --equals "finalize.body.build_id=test-workflow-id"
@@ -190,6 +192,23 @@ finalize_false() {
   expect_requests \
     --count upload=1 --count presigned=1 --count finalize=0 \
     --equals "upload.body.test_run.metadata.build_id=shard-build"
+}
+
+retry() {
+  # A rerun report uploaded next to the first one, before a single finalize
+  run_upload TESTNOD_RETRY=true TESTNOD_FINALIZE=false
+  expect_status 0
+  expect_requests \
+    --count upload=1 --count presigned=1 --count finalize=0 \
+    --equals "upload.body.retry=true" \
+    --equals "upload.body.test_run.metadata.build_id=test-workflow-id"
+}
+
+retry_as_1() {
+  # How a `true` boolean parameter can reach the script
+  run_upload TESTNOD_RETRY=1
+  expect_status 0
+  expect_requests --count upload=1 --count finalize=1 --equals "upload.body.retry=true"
 }
 
 finalize_only() {
@@ -319,6 +338,8 @@ scenario "cached pinned binary" cached_binary
 scenario "custom token variable name" custom_token_name
 scenario "token isn't printed" token_not_printed
 scenario "finalize false" finalize_false
+scenario "retry" retry
+scenario "retry as 1" retry_as_1
 scenario "finalize only" finalize_only
 scenario "tag-triggered pipeline" tag_pipeline
 scenario "missing results file" missing_results_file

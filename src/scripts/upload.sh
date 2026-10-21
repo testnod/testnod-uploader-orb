@@ -21,6 +21,7 @@ set -euo pipefail
 #   TESTNOD_FILE              JUnit XML path (positional arg to the binary)
 #   TESTNOD_TAGS              comma-separated tags
 #   TESTNOD_IGNORE_FAILURES   "true" | "false"
+#   TESTNOD_RETRY             "true" | "false"
 #   TESTNOD_UPLOADER_VERSION  "latest" or a pinned version
 #   TESTNOD_BUILD_ID          explicit build id, or "" to default to workflow id
 #   TESTNOD_FINALIZE          "true" | "false" | "only"
@@ -55,11 +56,17 @@ case "$TESTNOD_FINALIZE" in
     ;;
 esac
 
-# The compiled config turns "<<parameters.ignore_failures>>" into a YAML
-# boolean, which can reach the script as "1" rather than "true".
+# The compiled config turns "<<parameters.ignore_failures>>" and
+# "<<parameters.retry>>" into YAML booleans, which can reach the script as "1"
+# rather than "true".
 case "$TESTNOD_IGNORE_FAILURES" in
   true | 1) TESTNOD_IGNORE_FAILURES=true ;;
   *) TESTNOD_IGNORE_FAILURES=false ;;
+esac
+
+case "${TESTNOD_RETRY:-false}" in
+  true | 1) TESTNOD_RETRY=true ;;
+  *) TESTNOD_RETRY=false ;;
 esac
 
 # Resolve the token from the named env var via bash indirect expansion. Only the
@@ -155,6 +162,11 @@ if [ "$TESTNOD_FINALIZE" != "only" ]; then
 
   if [ "$TESTNOD_IGNORE_FAILURES" = "true" ]; then
     ARGS+=(-ignore-failures)
+  fi
+
+  # Marks this upload as a rerun; the uploader sends a top-level "retry": true.
+  if [ "$TESTNOD_RETRY" = "true" ]; then
+    ARGS+=(-retry)
   fi
 
   # The file path is the final positional argument.

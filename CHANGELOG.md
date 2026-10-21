@@ -3,6 +3,19 @@
 All notable changes to the `testnod/testnod-uploader` orb are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `retry` parameter on the `upload` command and job (boolean, default
+  `false`). When `true`, the upload is marked as a rerun of tests that failed
+  earlier in the same build: the uploader gets `-retry` and sends a top-level
+  `"retry": true`. Needs uploader v0.1.0 or later (`latest` already is).
+
+### Changed
+
+- CI: tests pin uploader v0.1.0 instead of v0.0.6.
+
 ## [v1.0.1] - 2026-10-03
 
 ### Fixed
