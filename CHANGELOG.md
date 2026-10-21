@@ -3,7 +3,7 @@
 All notable changes to the `testnod/testnod-uploader` orb are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [v1.1.0] - 2026-10-21
 
 ### Added
 

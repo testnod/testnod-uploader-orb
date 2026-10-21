@@ -8,7 +8,7 @@ description: >
 usage:
   version: 2.1
   orbs:
-    testnod-uploader: testnod/testnod-uploader@1.0
+    testnod-uploader: testnod/testnod-uploader@1.1
   jobs:
     test:
       docker:
