@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 The version lives in the git tag; there is no version field in `src/`. `CHANGELOG.md` keeps an `## [Unreleased]` section, and a release turns it into `## [vX.Y.Z] - YYYY-MM-DD` in a `Release vX.Y.Z` commit on `main` (step 5). The tag goes on that commit. Pushing a tag that matches `^v[0-9]+\.[0-9]+\.[0-9]+$` runs the CircleCI setup workflow (`.circleci/config.yml`) and then `test-deploy` (`.circleci/test-deploy.yml`), whose last job, `orb-tools/publish`, publishes `testnod/testnod-uploader@X.Y.Z` to the CircleCI Orb Registry with `pub_type: production`.
 
-Published orb versions are **immutable and can't be deleted**. Consumers pin ranges (the examples use `@1.0`), so every project on `@1` or `@1.0` picks up the new version on its next pipeline. There's no rollback short of cutting another release. Treat the push as a production deploy.
+Published orb versions are **immutable and can't be deleted**. Consumers pin ranges (the examples in `src/examples/` pin `@MAJOR.MINOR`), so every project pinned to the matching `@MAJOR` or `@MAJOR.MINOR` picks up the new version on its next pipeline. There's no rollback short of cutting another release. Treat the push as a production deploy.
 
 Requested bump: `$ARGUMENTS` (if empty, recommend one in step 3).
 
@@ -69,7 +69,7 @@ test/run-tests.sh
   STOP if `state` is `failure`/`error`, or `pending` with statuses still running. If there are no statuses at all, or `gh` isn't available, treat it as a CONFIRM. The `orb-tools/review` job only runs in CI, so a green local run doesn't replace it.
 
 **Risky content: CONFIRM each one that applies**
-- **Breaking orb interface.** Diff the orb's public surface: `git diff "$LAST"..HEAD -- src/commands src/jobs src/executors`. A removed or renamed command, job, executor, or parameter, a changed parameter `type` or `default`, a removed `enum` value, or a newly required parameter breaks consumers on `@1`/`@1.0`. That needs a **major** bump; list what changed and recommend major or holding the release.
+- **Breaking orb interface.** Diff the orb's public surface: `git diff "$LAST"..HEAD -- src/commands src/jobs src/executors`. A removed or renamed command, job, executor, or parameter, a changed parameter `type` or `default`, a removed `enum` value, or a newly required parameter breaks consumers pinned to the current major. That needs a **major** bump; list what changed and recommend major or holding the release.
 - **Uploader dependency.** `uploader_version` defaults to `latest`. If `src/scripts/upload.sh` passes a new flag to the uploader binary, the uploader release that adds that flag must already be published to `latest/`, or every default-config upload fails. Name the flag and ask whether that uploader release is out. Pinned uploader versions that predate the flag should be called out in the parameter description and CHANGELOG.
 - **TestNod API changes.** If `upload.sh` changes the finalize request (endpoint, headers, body), ask whether the matching TestNod webapp change is **deployed to production**.
 - **Release pipeline changed.** If `git diff --quiet "$LAST"..HEAD -- .circleci` shows changes, this is the first run of the edited pipeline, and its last job publishes to production. Summarize what changed (especially the `orb-tools/publish` job, `release-filters`, and the `requires` list) and confirm.
@@ -98,7 +98,7 @@ Then ask with AskUserQuestion: **Commit, tag, and push** / **Commit and tag loca
 ## 5. Release commit
 
 1. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [vX.Y.Z] - $(date +%F)`. Don't add a new empty `[Unreleased]` section; the next change adds it.
-2. On a minor or major bump, update the orb pin in each `src/examples/*.yml` (`testnod/testnod-uploader@1.0`) to the new `MAJOR.MINOR`, so the registry examples cover the new features. Leave the pin alone on a patch bump.
+2. On a minor or major bump, update the orb pin in each `src/examples/*.yml` (`testnod/testnod-uploader@<current MAJOR.MINOR>`) to the new `MAJOR.MINOR`, so the registry examples cover the new features. Leave the pin alone on a patch bump.
 3. Commit only those files with the message `Release vX.Y.Z`. Commits are signed by the user's git config; if signing fails, don't bypass it. Give the user the command to run themselves with `!`.
 
 ## 6. Tag and push
