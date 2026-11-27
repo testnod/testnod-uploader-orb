@@ -91,7 +91,9 @@ Show the user one summary:
 - The commits included (one line each)
 - The result of every gate, with any CONFIRM items called out
 - The release commit's changes (step 5): the CHANGELOG heading rename and, on a minor or major bump, the example pin update
-- Draft release notes. They become the GitHub Release body in step 8. Base them on the `[Unreleased]` entries, and lead with anything a user has to change in their config. Say compatibility breaks plainly.
+- Draft release notes. They become the GitHub Release body in step 8. Base them on the `[Unreleased]` entries, and lead with anything a user has to change in their config. Say compatibility breaks plainly. Also:
+  - List only what changed. Never add a bullet or line saying that parameters, config, or usage are unchanged.
+  - Don't include examples ("for example", "such as", "e.g.", or a parenthetical case) unless the user explicitly asks for one. State the change itself.
 
 Then ask with AskUserQuestion: **Commit, tag, and push** / **Commit and tag locally only** / **Cancel**. Prior approval in the conversation doesn't count. Ask every time.
 
@@ -146,7 +148,7 @@ Tell the user the result either way, with the CircleCI job link (`target_url`).
 Only once `orb-tools/publish` has **passed** and the registry shows the new version. Skip this step if the tag was only created locally.
 
 1. Read the current latest release as the template: `gh release view --json tagName,name,body`. Match its format: the title is the bare version (`vX.Y.Z`), the body opens with `## What's new` and a one-line summary, then `###` sections (such as `New`, `Fixes`, `Maintenance`) with short bullets.
-2. Draft the notes in that format from the step 4 draft. Write them to a file in the scratchpad, not the repo.
+2. Draft the notes in that format from the step 4 draft, following the same rules (compatibility breaks stated plainly, no "unchanged" bullets, no examples unless asked). Write them to a file in the scratchpad, not the repo.
 3. Show the notes and ask with AskUserQuestion: **Publish release** / **Edit notes** / **Skip**. A GitHub Release is public, so ask even though the tag push was already approved.
 4. Create the release on the existing tag and mark it latest. `--verify-tag` stops `gh` from creating a new tag if the name is wrong.
    ```bash
