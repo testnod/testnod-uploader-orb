@@ -19,7 +19,9 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Finalize errors show TestNod's `error_message` instead of the raw JSON body.
 - Finalize waits 5 seconds between retries instead of 2, to get past TestNod's
   per-minute rate limit.
-- `ignore_failures` description: it also covers paused uploads.
+- Parameter descriptions: the token is a project token, each `build_id` counts
+  as one test run toward the plan's monthly limit, and `ignore_failures`
+  covers paused uploads.
 - README: new "Plan limits and paused uploads" section.
 - CI: tests pin uploader v0.1.1, and cover both `403` responses, a finalize
   that finds no test run, and a `409` that's retried.

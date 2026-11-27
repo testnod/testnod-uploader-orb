@@ -17,7 +17,7 @@ set -euo pipefail
 
 # ---------------------------------------------------------------------------
 # Inputs (set by the command's `environment:` block):
-#   TESTNOD_TOKEN_NAME        name of the env var holding the API token
+#   TESTNOD_TOKEN_NAME        name of the env var holding the project token
 #   TESTNOD_FILE              JUnit XML path (positional arg to the binary)
 #   TESTNOD_TAGS              comma-separated tags
 #   TESTNOD_IGNORE_FAILURES   "true" | "false"

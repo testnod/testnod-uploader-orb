@@ -11,7 +11,7 @@ parameters:
     type: env_var_name
     default: TESTNOD_TOKEN
     description: >
-      NAME of the environment variable that holds your TestNod API token — not
+      NAME of the environment variable that holds your TestNod project token — not
       the token value itself, and without a leading "$". Configure the token in
       a CircleCI context (recommended) or a project environment variable. It is
       passed to the uploader and to the finalize endpoint, and is never printed.
@@ -57,6 +57,8 @@ parameters:
       Build identifier that groups parallel containers / fan-out jobs into one
       logical test run. Defaults to the CircleCI workflow id
       ($CIRCLE_WORKFLOW_ID), which is shared across a workflow's containers.
+      Each build id counts as one test run toward your TestNod plan's monthly
+      limit, so give shards their own build ids only if you want separate runs.
   finalize:
     type: enum
     enum: ["true", "false", "only"]

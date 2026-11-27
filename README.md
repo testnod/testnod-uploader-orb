@@ -8,6 +8,8 @@ See [`src/README.md`](src/README.md) for how the orb source is organized, and [`
 
 ## Plan limits and paused uploads
 
+Each `build_id` that TestNod finishes processing counts as one test run toward your plan's monthly limit. By default every container and job in a workflow shares `$CIRCLE_WORKFLOW_ID`, so a parallel or fan-out build counts once. Give shards their own `build_id` only if you want them as separate runs, since each one then counts. See [Plans and billing](https://testnod.com/docs/administration/plans-and-billing).
+
 TestNod refuses an upload with `403 Forbidden` when uploads are paused for your organization (well over the plan's monthly limit) or for the project (an inactive project on the Solo plan). Nothing is recorded, and the upload isn't retried. The step log shows TestNod's reason, for example:
 
 ```

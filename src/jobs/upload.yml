@@ -17,7 +17,7 @@ parameters:
   token:
     type: env_var_name
     default: TESTNOD_TOKEN
-    description: NAME of the environment variable that holds your TestNod API token.
+    description: NAME of the environment variable that holds your TestNod project token.
   file:
     type: string
     default: ""
@@ -41,7 +41,7 @@ parameters:
   build_id:
     type: string
     default: ""
-    description: Build id grouping shards into one run. Defaults to $CIRCLE_WORKFLOW_ID.
+    description: Build id grouping shards into one run, counted once toward the monthly limit. Defaults to $CIRCLE_WORKFLOW_ID.
   finalize:
     type: enum
     enum: ["true", "false", "only"]
