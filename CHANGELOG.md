@@ -3,6 +3,27 @@
 All notable changes to the `testnod/testnod-uploader` orb are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- When TestNod refuses an upload, for example with a `403` because uploads are
+  paused for the organization or project, the step now ends with an error that
+  points to the uploader's output, where TestNod's reason is printed. Needs
+  uploader v0.1.1 or later (`latest` already is).
+- With `ignore_failures: true`, a failed upload no longer leads to a second,
+  misleading finalize warning. Finalize now says there's nothing to finalize
+  because the upload failed.
+- A `finalize: "only"` job that finds no test run now explains that the upload
+  jobs may have been refused, and points to their logs.
+- Finalize errors show TestNod's `error_message` instead of the raw JSON body.
+- Finalize waits 5 seconds between retries instead of 2, to get past TestNod's
+  per-minute rate limit.
+- `ignore_failures` description: it also covers paused uploads.
+- README: new "Plan limits and paused uploads" section.
+- CI: tests pin uploader v0.1.1, and cover both `403` responses, a finalize
+  that finds no test run, and a `409` that's retried.
+
 ## [v1.1.0] - 2026-10-21
 
 ### Added

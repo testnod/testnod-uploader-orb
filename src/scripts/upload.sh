@@ -86,6 +86,17 @@ EFFECTIVE_BUILD_ID="${TESTNOD_BUILD_ID:-${CIRCLE_WORKFLOW_ID:-}}"
 # CIRCLE_BRANCH is empty on tag-triggered pipelines; fall back to the tag.
 BRANCH="${CIRCLE_BRANCH:-${CIRCLE_TAG:-}}"
 
+UPLOAD_FAILED=false
+
+# Fails the step, or with ignore_failures prints a warning and carries on.
+fail_or_warn() {
+  if [ "$TESTNOD_IGNORE_FAILURES" != "true" ]; then
+    echo "ERROR: $1" >&2
+    exit 1
+  fi
+  echo "WARNING: $1" >&2
+}
+
 # --------------------------- upload phase ----------------------------------
 if [ "$TESTNOD_FINALIZE" != "only" ]; then
   if [ -z "$TESTNOD_FILE" ]; then
@@ -160,10 +171,6 @@ if [ "$TESTNOD_FINALIZE" != "only" ]; then
     done
   fi
 
-  if [ "$TESTNOD_IGNORE_FAILURES" = "true" ]; then
-    ARGS+=(-ignore-failures)
-  fi
-
   # Marks this upload as a rerun; the uploader sends a top-level "retry": true.
   if [ "$TESTNOD_RETRY" = "true" ]; then
     ARGS+=(-retry)
@@ -172,8 +179,21 @@ if [ "$TESTNOD_FINALIZE" != "only" ]; then
   # The file path is the final positional argument.
   ARGS+=("$TESTNOD_FILE")
 
+  # The uploader prints the reason for a failure, including TestNod's
+  # error_message (for example, why a 403 refused the upload). ignore_failures
+  # is handled here rather than with the uploader's -ignore-failures flag, so
+  # the script still sees the exit status and finalize can tell why it has
+  # nothing to finalize.
   echo "Running TestNod uploader..."
+  set +e
   "$BINARY_PATH" "${ARGS[@]}"
+  UPLOAD_STATUS=$?
+  set -e
+
+  if [ "$UPLOAD_STATUS" -ne 0 ]; then
+    UPLOAD_FAILED=true
+    fail_or_warn "The TestNod upload failed (uploader exit status ${UPLOAD_STATUS}). The reason is in the uploader's output above."
+  fi
 fi
 
 # -------------------------- finalize phase ---------------------------------
@@ -182,20 +202,32 @@ if [ "$TESTNOD_FINALIZE" = "true" ] || [ "$TESTNOD_FINALIZE" = "only" ]; then
   echo "Finalizing TestNod test run for build ${EFFECTIVE_BUILD_ID}..."
 
   # `|| true` so a connection error doesn't exit under `set -e`: curl still
-  # writes "000" as the status code, which is handled below like any non-200.
+  # writes "000" as the status code, which is handled below. curl also retries
+  # a 429; TestNod's rate limit is per minute, so wait 5 seconds between tries.
   HTTP_CODE="$(curl -sS -o /tmp/testnod-finalize.body -w "%{http_code}" \
-    --retry 3 --retry-delay 2 --retry-connrefused \
+    --retry 3 --retry-delay 5 --retry-connrefused \
     -X POST "${BASE_URL}/integrations/test_runs/finalize" \
     -H "Content-Type: application/json" \
     -H "Accept: application/json" \
     -H "Project-Token: ${TESTNOD_TOKEN}" \
     -d "{\"build_id\":\"${EFFECTIVE_BUILD_ID}\"}")" || true
 
-  if [ "$HTTP_CODE" != "200" ]; then
+  if [ "$HTTP_CODE" = "000" ] || [ -z "$HTTP_CODE" ]; then
+    # curl got no response at all (DNS failure, connection refused, timeout)
+    fail_or_warn "Finalize returned HTTP 000: no response from TestNod."
+  elif [ "$HTTP_CODE" != "200" ]; then
     BODY="$(cat /tmp/testnod-finalize.body 2>/dev/null || true)"
-    echo "WARNING: Finalize returned HTTP ${HTTP_CODE}: ${BODY}" >&2
-    if [ "$TESTNOD_IGNORE_FAILURES" != "true" ]; then
-      exit 1
+    # TestNod errors look like {"error_message": "..."}; fall back to the raw body.
+    MESSAGE="$(printf '%s' "$BODY" | sed -n 's/.*"error_message"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' || true)"
+    MESSAGE="${MESSAGE:-$BODY}"
+
+    if [ "$HTTP_CODE" = "404" ] && [ "$UPLOAD_FAILED" = "true" ]; then
+      # The upload failure was already reported; a second warning would bury it.
+      echo "Nothing to finalize for build ${EFFECTIVE_BUILD_ID} because the upload above failed. TestNod said: ${MESSAGE}"
+    elif [ "$HTTP_CODE" = "404" ] && [[ "$MESSAGE" == "Test run not found"* ]]; then
+      fail_or_warn "Finalize returned HTTP 404: ${MESSAGE} No test run exists for build ${EFFECTIVE_BUILD_ID}. If the upload steps for this build failed, for example with a 403 because uploads are paused for the organization or project, the reason is in their logs."
+    else
+      fail_or_warn "Finalize returned HTTP ${HTTP_CODE}: ${MESSAGE}"
     fi
   else
     echo "Test run finalized."

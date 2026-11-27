@@ -5,15 +5,22 @@ call, and records every request so test steps can assert on them.
 
 Control endpoints (not part of the TestNod API):
   GET    /__requests  recorded requests as JSON
-  DELETE /__requests  clear recorded requests and reset the failure status
-  POST   /__fail      body {"status": 500}: answer every API request with that
-                      status until the next reset
+  DELETE /__requests  clear recorded requests and every failure rule
+  POST   /__fail      add a failure rule until the next reset. Body:
+                        status    HTTP status to answer with (required)
+                        endpoint  only fail this endpoint (upload, presigned,
+                                  finalize, upload_failed); default: all
+                        body      JSON response body;
+                                  default: {"error_message": "simulated failure"}
+                        times     fail this many requests, then stop; default: all
+                      The first rule that matches a request answers it.
 
 Usage: python test/mock_server.py [--port 8765]
 """
 
 import argparse
 import json
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 UPLOAD_PATH = "/integrations/test_runs/upload"
@@ -21,7 +28,8 @@ UPLOAD_FAILED_PATH = "/integrations/test_runs/upload_failed"
 FINALIZE_PATH = "/integrations/test_runs/finalize"
 PRESIGNED_PATH = "/presigned/upload"
 
-state = {"requests": [], "fail_status": None}
+state = {"requests": [], "failures": []}
+lock = threading.Lock()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -33,8 +41,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_DELETE(self):
         if self.path == "/__requests":
-            state["requests"].clear()
-            state["fail_status"] = None
+            with lock:
+                state["requests"].clear()
+                state["failures"].clear()
             self.respond(200, {})
         else:
             self.respond(404, {"error": "not found"})
@@ -43,7 +52,14 @@ class Handler(BaseHTTPRequestHandler):
         body = self.read_body()
 
         if self.path == "/__fail":
-            state["fail_status"] = json.loads(body)["status"]
+            rule = json.loads(body)
+            with lock:
+                state["failures"].append({
+                    "status": rule["status"],
+                    "endpoint": rule.get("endpoint"),
+                    "body": rule.get("body", {"error_message": "simulated failure"}),
+                    "times": rule.get("times"),
+                })
             self.respond(200, {})
             return
 
@@ -57,14 +73,14 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self.record(endpoint, json.loads(body))
-        if self.fail_if_requested():
+        if self.fail_if_requested(endpoint):
             return
 
         if endpoint == "upload":
             host = self.headers["Host"]
             self.respond(201, {
                 "id": 1,
-                "project": "test-project",
+                "project_id": "00000000-0000-4000-8000-000000000001",
                 "test_run_id": 1,
                 "upload_id": 1,
                 "test_run_url": f"http://{host}/test_runs/1",
@@ -80,7 +96,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         self.record("presigned", body.decode("utf-8"))
-        if self.fail_if_requested():
+        if self.fail_if_requested("presigned"):
             return
         self.respond(200, {})
 
@@ -89,16 +105,22 @@ class Handler(BaseHTTPRequestHandler):
         return self.rfile.read(length)
 
     def record(self, endpoint, body):
-        state["requests"].append({
-            "endpoint": endpoint,
-            "headers": {k.lower(): v for k, v in self.headers.items()},
-            "body": body,
-        })
+        with lock:
+            state["requests"].append({
+                "endpoint": endpoint,
+                "headers": {k.lower(): v for k, v in self.headers.items()},
+                "body": body,
+            })
 
-    def fail_if_requested(self):
-        if state["fail_status"] is None:
-            return False
-        self.respond(state["fail_status"], {"error": "simulated failure"})
+    def fail_if_requested(self, endpoint):
+        with lock:
+            rule = next((r for r in state["failures"]
+                         if r["endpoint"] in (None, endpoint) and r["times"] != 0), None)
+            if rule is None:
+                return False
+            if rule["times"] is not None:
+                rule["times"] -= 1
+        self.respond(rule["status"], rule["body"])
         return True
 
     def respond(self, status, payload):

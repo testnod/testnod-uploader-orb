@@ -32,8 +32,9 @@ parameters:
     type: boolean
     default: false
     description: >
-      When true, pass -ignore-failures to the uploader and do not fail the job
-      if the finalize call returns a non-200 response.
+      When true, do not fail the job when the upload or finalize fails,
+      including a 403 when TestNod has paused uploads for your organization or
+      project. Errors are printed as warnings instead.
   retry:
     type: boolean
     default: false
@@ -47,7 +48,8 @@ parameters:
     default: latest
     description: >
       Version of the TestNod uploader binary to download. "latest" re-downloads
-      on every run; a pinned version (e.g. "1.4.0") is cached across runs.
+      on every run; a pinned version (e.g. "v0.1.1") is cached across runs.
+      v0.1.1 and later print TestNod's reason when it refuses an upload.
   build_id:
     type: string
     default: ""

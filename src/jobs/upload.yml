@@ -29,7 +29,7 @@ parameters:
   ignore_failures:
     type: boolean
     default: false
-    description: When true, do not fail the job on uploader or finalize errors.
+    description: When true, do not fail the job on upload or finalize errors, including a 403 when uploads are paused.
   retry:
     type: boolean
     default: false

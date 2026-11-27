@@ -76,7 +76,7 @@ jobs:
       - testnod-uploader/upload:
           file: test/fixtures/results.xml
           tags: " ci , rspec,,nightly"
-          uploader_version: v0.1.0
+          uploader_version: v0.1.1
       - run:
           name: "Check: upload and finalize"
           command: |
@@ -176,7 +176,7 @@ jobs:
           command: echo "127.0.0.1 releases.testnod.com" | sudo tee -a /etc/hosts
       - testnod-uploader/upload:
           file: test/fixtures/results.xml
-          uploader_version: v0.1.0
+          uploader_version: v0.1.1
       - run:
           name: "Check: upload with cached binary"
           command: python3 test/expect.py --count upload=1 --count presigned=1 --count finalize=1

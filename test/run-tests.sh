@@ -21,7 +21,7 @@ cd "$(dirname "$0")/.."
 
 MOCK_PORT=8765
 MOCK_URL="http://127.0.0.1:${MOCK_PORT}"
-UPLOADER_VERSION="${UPLOADER_VERSION:-v0.1.0}"
+UPLOADER_VERSION="${UPLOADER_VERSION:-v0.1.1}"
 UPLOADER_DIR="/tmp/testnod-uploader"
 TMP_DIR=$(mktemp -d)
 OUTPUT="${TMP_DIR}/output.log"
@@ -66,6 +66,29 @@ reset_mock() {
 # Makes the mock server answer every API request with the given status.
 fail_mock() {
   curl -fsS -X POST -d "{\"status\": $1}" "${MOCK_URL}/__fail" > /dev/null
+}
+
+# Adds a mock server failure rule from a JSON body, for example
+#   '{"status": 403, "endpoint": "upload", "body": {...}, "times": 1}'
+# See test/mock_server.py for the fields.
+fail_mock_rule() {
+  curl -fsS -X POST -d "$1" "${MOCK_URL}/__fail" > /dev/null
+}
+
+# The two 403 bodies TestNod returns when uploads are paused
+ORG_PAUSED_MESSAGE="Uploads are paused for your organization because it went well over the Solo plan's limit of 250 test runs this month. They resume when the count resets on December 14. To resume sooner, an admin can upgrade to Team or contact TestNod support."
+PROJECT_PAUSED_MESSAGE="This project is paused because the Solo plan includes 1 project and another project in your organization is active. To upload test runs here, upgrade to Team or have an admin make this the active project from its page in TestNod."
+RUN_NOT_FOUND_RULE='{"status": 404, "endpoint": "finalize", "body": {"error_message": "Test run not found for this build_id."}}'
+
+upload_403_rule() {
+  python3 -c 'import json, sys; print(json.dumps({"status": 403, "endpoint": "upload", "body": {"error_message": sys.argv[1]}}))' "$1"
+}
+
+expect_no_output() {
+  if grep -qF -- "$1" "$OUTPUT"; then
+    echo "expected output not to contain: $1"
+    return 1
+  fi
 }
 
 # Runs upload.sh with the orb command's defaults plus CircleCI built-ins.
@@ -282,11 +305,68 @@ server_error_ignore_failures_as_1() {
 }
 
 finalize_error() {
-  fail_mock 422
+  fail_mock_rule '{"status": 422, "body": {"error_message": "metadata.build_id is required."}}'
   run_upload TESTNOD_FINALIZE=only
   expect_status 1
-  expect_output "Finalize returned HTTP 422"
+  expect_output "ERROR: Finalize returned HTTP 422: metadata.build_id is required."
   expect_requests --count finalize=1
+}
+
+organization_paused() {
+  fail_mock_rule "$(upload_403_rule "$ORG_PAUSED_MESSAGE")"
+  run_upload
+  expect_status 1
+  expect_output "$ORG_PAUSED_MESSAGE"
+  expect_output "ERROR: The TestNod upload failed"
+  # Not retried, no file PUT, no upload_failed callback, no finalize
+  expect_requests --count upload=1 --count presigned=0 --count upload_failed=0 --count finalize=0
+}
+
+project_paused() {
+  fail_mock_rule "$(upload_403_rule "$PROJECT_PAUSED_MESSAGE")"
+  run_upload TESTNOD_FINALIZE=false
+  expect_status 1
+  expect_output "$PROJECT_PAUSED_MESSAGE"
+  expect_requests --count upload=1 --count presigned=0 --count upload_failed=0 --count finalize=0
+}
+
+paused_ignore_failures() {
+  # Finalize then finds no run: one line about it, not a second warning
+  fail_mock_rule "$(upload_403_rule "$ORG_PAUSED_MESSAGE")"
+  fail_mock_rule "$RUN_NOT_FOUND_RULE"
+  run_upload TESTNOD_IGNORE_FAILURES=true
+  expect_status 0
+  expect_output "$ORG_PAUSED_MESSAGE"
+  expect_output "WARNING: The TestNod upload failed"
+  expect_output "Nothing to finalize for build test-workflow-id because the upload above failed. TestNod said: Test run not found for this build_id."
+  expect_no_output "Finalize returned HTTP 404"
+  expect_requests --count upload=1 --count presigned=0 --count upload_failed=0 --count finalize=1
+}
+
+finalize_run_not_found() {
+  # A separate finalize job after every shard's upload got a 403
+  fail_mock_rule "$RUN_NOT_FOUND_RULE"
+  run_upload TESTNOD_FINALIZE=only TESTNOD_FILE= TESTNOD_BUILD_ID=shard-build
+  expect_status 1
+  expect_output "ERROR: Finalize returned HTTP 404: Test run not found for this build_id. No test run exists for build shard-build."
+  expect_output "with a 403 because uploads are paused"
+  expect_requests --count finalize=1
+}
+
+finalize_run_not_found_ignore_failures() {
+  fail_mock_rule "$RUN_NOT_FOUND_RULE"
+  run_upload TESTNOD_FINALIZE=only TESTNOD_FILE= TESTNOD_IGNORE_FAILURES=true
+  expect_status 0
+  expect_output "WARNING: Finalize returned HTTP 404: Test run not found for this build_id."
+}
+
+concurrent_upload_conflict() {
+  # Two shards raced to create the run; the uploader retries the 409
+  fail_mock_rule '{"status": 409, "endpoint": "upload", "body": {"error_message": "Conflicting concurrent upload."}, "times": 1}'
+  run_upload
+  expect_status 0
+  expect_output "Test run finalized."
+  expect_requests --count upload=2 --count presigned=1 --count finalize=1
 }
 
 unreachable_server() {
@@ -350,6 +430,12 @@ scenario "server error" server_error
 scenario "server error with ignore_failures" server_error_ignore_failures
 scenario "server error with ignore_failures as 1" server_error_ignore_failures_as_1
 scenario "finalize error" finalize_error
+scenario "organization paused (403)" organization_paused
+scenario "project paused (403)" project_paused
+scenario "paused with ignore_failures" paused_ignore_failures
+scenario "finalize finds no test run" finalize_run_not_found
+scenario "finalize finds no test run with ignore_failures" finalize_run_not_found_ignore_failures
+scenario "concurrent upload conflict (409)" concurrent_upload_conflict
 scenario "unreachable server" unreachable_server
 scenario "unreachable server with ignore_failures" unreachable_server_ignore_failures
 scenario "version that doesn't exist" missing_version
